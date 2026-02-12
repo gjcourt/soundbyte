@@ -1,0 +1,19 @@
+# Binaries
+/client
+/server
+/audio-client
+/audio-server
+*_unix
+*.exe
+*.test
+
+# Go
+vendor/
+go.sum
+
+# OS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
