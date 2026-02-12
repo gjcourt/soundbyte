@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  # The Audio Server (Sender)
+  server:
+    build: .
+    image: soundbyte
+    entrypoint: audio-server
+    command: ["--addr", "client:5004", "--input", "stdin"]
+    ports:
+      - "5004:5004/udp"
+    stdin_open: true # Allows piping data in
+    tty: true
+
+  # The Audio Client (Receiver)
+  # NOTE: To hear audio, this container needs access to the host sound device.
+  # This works on Linux but NOT on macOS/Windows Docker Desktop.
+  # On macOS, run the client locally: 'go run ./cmd/client'
+  client:
+    build: .
+    entrypoint: audio-client
+    command: ["--port", "5004"]
+    ports:
+      - "5004:5004/udp"
+    # Linux Audio Support
+    devices:
+      - /dev/snd:/dev/snd
+    environment:
+      - AUDIODEV=default
