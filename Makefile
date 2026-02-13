@@ -50,3 +50,7 @@ docker-up:
 	docker-compose up
 
 .PHONY: all build test clean run-server run-client deps lint docker-build docker-up
+
+.PHONY: image
+image:
+	./scripts/build_and_push_image.sh
