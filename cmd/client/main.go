@@ -90,9 +90,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
-	conn.SetReadBuffer(1024 * 1024)
+	if err := conn.SetReadBuffer(1024 * 1024); err != nil {
+		log.Fatal(err)
+	}
 
 	log.Printf("Listening on %s...", addr)
 

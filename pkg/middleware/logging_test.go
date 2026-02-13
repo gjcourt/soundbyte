@@ -1,9 +1,9 @@
 package middleware
 
 import (
-"bytes"
-"log"
-"testing"
+	"bytes"
+	"log"
+	"testing"
 )
 
 func TestLogger(t *testing.T) {
@@ -13,7 +13,7 @@ func TestLogger(t *testing.T) {
 	defer log.SetOutput(nil)
 
 	l := New("TEST")
-	
+
 	l.Log(100, "127.0.0.1")
 	if l.byteCount != 100 {
 		t.Errorf("Expected 100 bytes, got %d", l.byteCount)

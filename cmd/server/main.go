@@ -28,7 +28,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to open input: %v", err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		input = f
 	}
 
@@ -43,7 +43,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to dial UDP: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Config: 48kHz, S16LE, Stereo
 	// We use RAW PCM instead of Opus to maintain "Pure Go" requirement (pion/opus is decode-only).
@@ -51,8 +51,6 @@ func main() {
 	// 48000 Hz * 2 chan * 2 bytes = 192,000 bytes/sec.
 	// 5ms = 192000 * 0.005 = 960 bytes. Perfect fit.
 	const frameSizeMs = 5
-	const sampleRate = 48000
-	const channels = 2
 	const frameSizeBytes = 192000 * frameSizeMs / 1000 // 960 bytes
 
 	pcmBytes := make([]byte, frameSizeBytes)
