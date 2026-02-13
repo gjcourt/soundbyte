@@ -2,8 +2,8 @@
 package jitter
 
 import (
-	"soundbyte/pkg/protocol"
 	"sort"
+	"soundbyte/pkg/protocol"
 	"sync"
 )
 

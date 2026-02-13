@@ -19,8 +19,8 @@ RUN CGO_ENABLED=1 go build -o /client ./cmd/client
 FROM alpine:latest
 RUN apk add --no-cache alsa-lib
 
-COPY --from=builder /server /usr/local/bin/audio-server
-COPY --from=builder /client /usr/local/bin/audio-client
+COPY --from=builder /server /usr/local/bin/soundbyte-server
+COPY --from=builder /client /usr/local/bin/soundbyte-client
 
 # Default to server
-ENTRYPOINT ["audio-server"]
+ENTRYPOINT ["soundbyte-server"]

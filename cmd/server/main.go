@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"soundbyte/pkg/middleware"
 	"soundbyte/pkg/protocol"
 )
 
@@ -59,6 +60,8 @@ func main() {
 
 	log.Printf("Streaming Raw PCM to %s (Expected: S16LE Stereo 48kHz)", *targetAddr)
 
+	mw := middleware.New("TX")
+
 	for {
 		// Read full PCM frame
 		// This blocks until enough data is available (natural pacing for live sources)
@@ -87,9 +90,11 @@ func main() {
 		}
 
 		// Send
-		_, err = conn.Write(encodedBytes)
+		n, err := conn.Write(encodedBytes)
 		if err != nil {
 			log.Printf("UDP write error: %v", err)
+		} else {
+			mw.Log(n, *targetAddr)
 		}
 	}
 }

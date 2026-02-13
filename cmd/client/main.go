@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"soundbyte/pkg/jitter"
+	"soundbyte/pkg/middleware"
 	"soundbyte/pkg/protocol"
 
 	"github.com/gopxl/beep/v2"
@@ -100,14 +101,17 @@ func main() {
 
 	// 3. Receive Loop (Background)
 	go func() {
+		mw := middleware.New("RX")
 		// Max UDP payload expected ~960 + header (~1000)
 		buf := make([]byte, 2048)
 		for {
-			n, _, err := conn.ReadFromUDP(buf)
+			n, addr, err := conn.ReadFromUDP(buf)
 			if err != nil {
 				log.Printf("Read error: %v", err)
 				continue
 			}
+
+			mw.Log(n, addr.String())
 
 			// Copy data
 			data := make([]byte, n)

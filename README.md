@@ -26,7 +26,7 @@ Designed to support Spotify Connect (via `librespot`) and Linux Pipes.
 
 ```bash
 git clone <repo>
-cd audio
+cd soundbyte
 go mod download
 ```
 

@@ -5,7 +5,7 @@ services:
   server:
     build: .
     image: soundbyte
-    entrypoint: audio-server
+    entrypoint: soundbyte-server
     command: ["--addr", "client:5004", "--input", "stdin"]
     ports:
       - "5004:5004/udp"
@@ -18,7 +18,7 @@ services:
   # On macOS, run the client locally: 'go run ./cmd/client'
   client:
     build: .
-    entrypoint: audio-client
+    entrypoint: soundbyte-client
     command: ["--port", "5004"]
     ports:
       - "5004:5004/udp"
