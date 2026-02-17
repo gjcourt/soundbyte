@@ -1,19 +1,19 @@
 #!/bin/bash
 set -e
 
-# specific registry and image name
-REGISTRY="ghcr.io"
-USER="gjcourt"
+# Configurable via environment variables (set by Makefile or manually)
+REGISTRY="${REGISTRY:-ghcr.io}"
+USER="${REGISTRY_USER:-gjcourt}"
 PROJECT="soundbyte"
-DATE=$(date +%Y-%m-%d)
-TAG="$DATE"
+TAG="${IMAGE_TAG:-$(date +%Y-%m-%d)}"
+PLATFORM="${PLATFORM:-linux/amd64}"
 
 # Function to check if image tag exists
 image_exists() {
     docker manifest inspect "$REGISTRY/$USER/$PROJECT:$1" > /dev/null 2>&1
 }
 
-# Check if base tag exists
+# Check if base tag exists and find next available suffix
 if image_exists "$TAG"; then
     echo "Tag $TAG exists. Finding next available version suffix..."
     SUFFIX=2
@@ -25,8 +25,8 @@ fi
 
 IMAGE="$REGISTRY/$USER/$PROJECT:$TAG"
 
-echo "Building image: $IMAGE"
-docker build -t "$IMAGE" .
+echo "Building image: $IMAGE (platform: $PLATFORM)"
+docker build --platform "$PLATFORM" -t "$IMAGE" .
 
 echo "Pushing image: $IMAGE"
 docker push "$IMAGE"

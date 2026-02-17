@@ -9,6 +9,7 @@ import (
 	"net"
 	"time"
 
+	"soundbyte/pkg/auth"
 	"soundbyte/pkg/jitter"
 	"soundbyte/pkg/middleware"
 	"soundbyte/pkg/protocol"
@@ -82,7 +83,14 @@ func (s *PCMStreamer) Err() error {
 func main() {
 	port := flag.Int("port", 5004, "UDP port to listen on")
 	bufferPackets := flag.Int("buf", 20, "Jitter buffer size (packets). 20 * 5ms = 100ms")
+	token := flag.String("token", "", "Shared secret for HMAC-SHA256 packet authentication (optional)")
 	flag.Parse()
+
+	var authKey []byte
+	if *token != "" {
+		authKey = []byte(*token)
+		log.Println("Packet authentication enabled")
+	}
 
 	// 1. Setup UDP
 	addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", *port))
@@ -104,20 +112,27 @@ func main() {
 	// 3. Receive Loop (Background)
 	go func() {
 		mw := middleware.New("RX")
-		// Max UDP payload expected ~960 + header (~1000)
+		// Max UDP payload expected ~960 + header + optional HMAC (~1032)
 		buf := make([]byte, 2048)
 		for {
-			n, addr, err := conn.ReadFromUDP(buf)
+			n, raddr, err := conn.ReadFromUDP(buf)
 			if err != nil {
 				log.Printf("Read error: %v", err)
 				continue
 			}
 
-			mw.Log(n, addr.String())
+			mw.Log(n, raddr.String())
 
 			// Copy data
 			data := make([]byte, n)
 			copy(data, buf[:n])
+
+			// Verify auth if enabled
+			data, err = auth.Verify(data, authKey)
+			if err != nil {
+				// Drop unauthenticated packets silently
+				continue
+			}
 
 			pkt, err := protocol.Decode(data)
 			if err != nil {

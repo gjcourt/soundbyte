@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"soundbyte/pkg/auth"
 	"soundbyte/pkg/middleware"
 	"soundbyte/pkg/protocol"
 )
@@ -17,7 +18,14 @@ import (
 func main() {
 	targetAddr := flag.String("addr", "255.255.255.255:5004", "Target UDP address")
 	inputPath := flag.String("input", "stdin", "Path to input pipe/file (or 'stdin')")
+	token := flag.String("token", "", "Shared secret for HMAC-SHA256 packet authentication (optional)")
 	flag.Parse()
+
+	var authKey []byte
+	if *token != "" {
+		authKey = []byte(*token)
+		log.Println("Packet authentication enabled")
+	}
 
 	// 1. Setup Input
 	var input io.Reader
@@ -86,6 +94,9 @@ func main() {
 			log.Printf("Packet encode error: %v", err)
 			continue
 		}
+
+		// Sign packet if auth is enabled
+		encodedBytes = auth.Sign(encodedBytes, authKey)
 
 		// Send
 		n, err := conn.Write(encodedBytes)

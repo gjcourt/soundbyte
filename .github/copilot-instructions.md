@@ -46,7 +46,25 @@
   - `protocol` (Internal package for packet definitions)
   - `jitter` (Internal package for packet buffering)
 
+## Container Strategy
+
+- **Versioning**: Tag images with the current date in `YYYY-MM-DD` format (e.g., `2026-02-15`).
+- **Deduplication**: If a tag for today already exists, append `-v2`, `-v3`, etc. (e.g., `2026-02-15-v2`).
+- **Push Policy**: Push updated images for all significant changes.
+
 ## Quality Assurance
 
-- Run `make lint` before committing.
+### CI quality gate
+
+**Linting and tests must pass before creating or updating a PR.**
+
+- Run `golangci-lint run ./...` (or `make lint`) locally — must report **0 issues**.
+- Run `go test -race ./...` (or `make test`) locally — all tests must **pass**.
+- The CI pipeline runs both checks on every push. Never push code that you know
+  has lint warnings or test failures.
+- If CI fails after pushing, fix the issues and force-push the branch before
+  requesting review.
+
+### General
+
 - Ensure efficient memory usage (avoid unnecessary allocations in hot loops, e.g., audio processing).

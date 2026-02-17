@@ -1,16 +1,13 @@
-# Pull Request
-
-## What Changed
-<!-- Describe the changes in detail -->
+## What changed
+<!-- concise list of changes -->
 
 ## Why
-<!-- Explain the motivation behind these changes -->
+<!-- What problem does this solve? -->
 
 ## Notes
-<!-- Any additional context, trade-offs, or instructions for the reviewer -->
+<!-- screenshots, instructions, or other context -->
 
 ## Checklist
-- [ ] Code compiles and runs locally
-- [ ] `make lint` passes with no errors
-- [ ] Tests added/updated (if applicable)
+- [ ] `golangci-lint run ./...` passes with 0 issues
+- [ ] `go test -race ./...` passes
 - [ ] Documentation updated (if applicable)
