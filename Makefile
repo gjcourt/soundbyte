@@ -50,3 +50,13 @@ docker-up:
 	docker-compose up
 
 .PHONY: all build test clean run-server run-client deps lint docker-build docker-up
+
+# Container image variables
+REGISTRY ?= ghcr.io
+REGISTRY_USER ?= gjcourt
+IMAGE_TAG ?= $(shell date +%Y-%m-%d)
+PLATFORM ?= linux/amd64
+
+.PHONY: image
+image:
+	REGISTRY=$(REGISTRY) REGISTRY_USER=$(REGISTRY_USER) IMAGE_TAG=$(IMAGE_TAG) PLATFORM=$(PLATFORM) ./scripts/build_and_push_image.sh

@@ -10,13 +10,22 @@ import (
 	"os"
 	"time"
 
+	"soundbyte/pkg/auth"
+	"soundbyte/pkg/middleware"
 	"soundbyte/pkg/protocol"
 )
 
 func main() {
 	targetAddr := flag.String("addr", "255.255.255.255:5004", "Target UDP address")
 	inputPath := flag.String("input", "stdin", "Path to input pipe/file (or 'stdin')")
+	token := flag.String("token", "", "Shared secret for HMAC-SHA256 packet authentication (optional)")
 	flag.Parse()
+
+	var authKey []byte
+	if *token != "" {
+		authKey = []byte(*token)
+		log.Println("Packet authentication enabled")
+	}
 
 	// 1. Setup Input
 	var input io.Reader
@@ -27,7 +36,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to open input: %v", err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		input = f
 	}
 
@@ -42,7 +51,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to dial UDP: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Config: 48kHz, S16LE, Stereo
 	// We use RAW PCM instead of Opus to maintain "Pure Go" requirement (pion/opus is decode-only).
@@ -50,14 +59,14 @@ func main() {
 	// 48000 Hz * 2 chan * 2 bytes = 192,000 bytes/sec.
 	// 5ms = 192000 * 0.005 = 960 bytes. Perfect fit.
 	const frameSizeMs = 5
-	const sampleRate = 48000
-	const channels = 2
 	const frameSizeBytes = 192000 * frameSizeMs / 1000 // 960 bytes
 
 	pcmBytes := make([]byte, frameSizeBytes)
 	seq := uint32(0)
 
 	log.Printf("Streaming Raw PCM to %s (Expected: S16LE Stereo 48kHz)", *targetAddr)
+
+	mw := middleware.New("TX")
 
 	for {
 		// Read full PCM frame
@@ -86,10 +95,15 @@ func main() {
 			continue
 		}
 
+		// Sign packet if auth is enabled
+		encodedBytes = auth.Sign(encodedBytes, authKey)
+
 		// Send
-		_, err = conn.Write(encodedBytes)
+		n, err := conn.Write(encodedBytes)
 		if err != nil {
 			log.Printf("UDP write error: %v", err)
+		} else {
+			mw.Log(n, *targetAddr)
 		}
 	}
 }

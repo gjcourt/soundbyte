@@ -1,8 +1,8 @@
 # Binaries
 /client
 /server
-/audio-client
-/audio-server
+/soundbyte-client
+/soundbyte-server
 *_unix
 *.exe
 *.test
