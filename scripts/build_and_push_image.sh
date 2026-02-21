@@ -24,11 +24,9 @@ if image_exists "$TAG"; then
 fi
 
 IMAGE="$REGISTRY/$USER/$PROJECT:$TAG"
+PLATFORM=${PLATFORM:-"linux/amd64,linux/arm64"}
 
-echo "Building image: $IMAGE (platform: $PLATFORM)"
-docker build --platform "$PLATFORM" -t "$IMAGE" .
-
-echo "Pushing image: $IMAGE"
-docker push "$IMAGE"
+echo "Building and pushing image: $IMAGE for platforms: $PLATFORM"
+docker buildx build --platform "$PLATFORM" -t "$IMAGE" --push .
 
 echo "Done! Image pushed to $IMAGE"
