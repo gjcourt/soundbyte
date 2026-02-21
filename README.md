@@ -3,6 +3,13 @@
 A pure Go client/server application to stream audio over UDP using Raw PCM chunks (for simplicity and zero-dependency).
 Designed to support Spotify Connect (via `librespot`) and Linux Pipes.
 
+## Documentation
+
+For detailed documentation, please refer to the [docs/](./docs/) folder:
+- [API Documentation](./docs/api.md)
+- [Authentication](./docs/authentication.md)
+- [Architecture](./docs/architecture.md)
+
 ## Architecture
 
 *   **Server**: Reads PCM audio from `stdin` or a named pipe, chunks it into 5ms frames, and streams it over UDP.
