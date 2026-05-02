@@ -1,0 +1,67 @@
+version: "2"
+
+run:
+  timeout: 3m
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - soundbyte
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - revive
+    - gosec
+    - misspell
+    - unconvert
+    - depguard
+
+  settings:
+    revive:
+      rules:
+        - name: exported
+          arguments:
+            - disableStutteringCheck
+        - name: unused-parameter
+    depguard:
+      rules:
+        # These rules enforce the target hex layout once internal/ packages exist.
+        # No existing code lives under internal/ yet, so no legacy allows are needed.
+        domain-no-other-internal:
+          files:
+            - "**/internal/domain/**/*.go"
+          deny:
+            - pkg: "soundbyte/internal/ports"
+              desc: "domain must not import ports"
+            - pkg: "soundbyte/internal/app"
+              desc: "domain must not import app layer"
+            - pkg: "soundbyte/internal/adapters"
+              desc: "domain must not import adapters"
+
+        app-no-adapters:
+          files:
+            - "**/internal/app/**/*.go"
+          deny:
+            - pkg: "soundbyte/internal/adapters"
+              desc: "app layer must depend only on port interfaces, not adapter implementations"
+
+        adapters-isolation:
+          files:
+            - "**/internal/adapters/**/*.go"
+          deny:
+            - pkg: "soundbyte/internal/app"
+              desc: "adapters must not import the app layer"
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
