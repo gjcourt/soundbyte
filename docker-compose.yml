@@ -1,9 +1,9 @@
-version: '3.8'
-
 services:
   # The Audio Server (Sender)
   server:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     image: soundbyte
     entrypoint: soundbyte-server
     command: ["--addr", "client:5004", "--input", "stdin"]
@@ -17,7 +17,10 @@ services:
   # This works on Linux but NOT on macOS/Windows Docker Desktop.
   # On macOS, run the client locally: 'go run ./cmd/client'
   client:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    image: soundbyte-client
     entrypoint: soundbyte-client
     command: ["--port", "5004"]
     ports:
