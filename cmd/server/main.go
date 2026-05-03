@@ -2,17 +2,15 @@
 package main
 
 import (
-	"bufio"
+	"context"
 	"flag"
-	"io"
 	"log"
 	"net"
-	"os"
-	"time"
 
-	"soundbyte/pkg/auth"
+	adaptudp "soundbyte/internal/adapters/udp"
+	"soundbyte/internal/adapters/stdin"
+	"soundbyte/internal/app"
 	"soundbyte/pkg/middleware"
-	"soundbyte/pkg/protocol"
 )
 
 func main() {
@@ -27,22 +25,21 @@ func main() {
 		log.Println("Packet authentication enabled")
 	}
 
-	// 1. Setup Input
-	var input io.Reader
+	// Setup input source
+	var (
+		source *stdin.Source
+		err    error
+	)
 	if *inputPath == "stdin" {
-		input = os.Stdin
+		source = stdin.NewSource()
 	} else {
-		f, err := os.Open(*inputPath)
+		source, err = stdin.NewFileSource(*inputPath)
 		if err != nil {
 			log.Fatalf("Failed to open input: %v", err)
 		}
-		defer func() { _ = f.Close() }()
-		input = f
 	}
 
-	reader := bufio.NewReader(input)
-
-	// 2. Setup Network
+	// Setup UDP sender
 	raddr, err := net.ResolveUDPAddr("udp", *targetAddr)
 	if err != nil {
 		log.Fatalf("Invalid address: %v", err)
@@ -53,57 +50,30 @@ func main() {
 	}
 	defer func() { _ = conn.Close() }()
 
-	// Config: 48kHz, S16LE, Stereo
-	// We use RAW PCM instead of Opus to maintain "Pure Go" requirement (pion/opus is decode-only).
-	// To fit in MTU (1500), we must use small frames.
-	// 48000 Hz * 2 chan * 2 bytes = 192,000 bytes/sec.
-	// 5ms = 192000 * 0.005 = 960 bytes. Perfect fit.
-	const frameSizeMs = 5
-	const frameSizeBytes = 192000 * frameSizeMs / 1000 // 960 bytes
+	mw := middleware.New("TX")
+	sender := adaptudp.NewSender(conn, authKey)
+	loggingSender := &loggingPacketSender{inner: sender, mw: mw, addr: *targetAddr}
 
-	pcmBytes := make([]byte, frameSizeBytes)
-	seq := uint32(0)
+	svc := app.NewStreamingService(source, loggingSender)
 
 	log.Printf("Streaming Raw PCM to %s (Expected: S16LE Stereo 48kHz)", *targetAddr)
-
-	mw := middleware.New("TX")
-
-	for {
-		// Read full PCM frame
-		// This blocks until enough data is available (natural pacing for live sources)
-		_, err := io.ReadFull(reader, pcmBytes)
-		if err != nil {
-			if err == io.EOF {
-				log.Println("End of stream")
-				break
-			}
-			log.Printf("Error reading input: %v", err)
-			break
-		}
-
-		// Create Packet
-		pkt := &protocol.Packet{
-			Sequence:  seq,
-			Timestamp: uint64(time.Now().UnixNano()),
-			Data:      pcmBytes, // Raw PCM
-		}
-		seq++
-
-		encodedBytes, err := pkt.Encode()
-		if err != nil {
-			log.Printf("Packet encode error: %v", err)
-			continue
-		}
-
-		// Sign packet if auth is enabled
-		encodedBytes = auth.Sign(encodedBytes, authKey)
-
-		// Send
-		n, err := conn.Write(encodedBytes)
-		if err != nil {
-			log.Printf("UDP write error: %v", err)
-		} else {
-			mw.Log(n, *targetAddr)
-		}
+	if err := svc.Stream(context.Background()); err != nil {
+		log.Fatalf("Streaming stopped: %v", err)
 	}
+	log.Println("End of stream")
+}
+
+// loggingPacketSender wraps a PacketSender and logs each sent packet.
+type loggingPacketSender struct {
+	inner interface{ Send([]byte) (int, error) }
+	mw    *middleware.Logger
+	addr  string
+}
+
+func (l *loggingPacketSender) Send(data []byte) (int, error) {
+	n, err := l.inner.Send(data)
+	if err == nil {
+		l.mw.Log(n, l.addr)
+	}
+	return n, err
 }

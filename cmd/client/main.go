@@ -9,76 +9,51 @@ import (
 	"net"
 	"time"
 
-	"soundbyte/pkg/auth"
-	"soundbyte/pkg/jitter"
+	"soundbyte/internal/domain"
+	adaptudp "soundbyte/internal/adapters/udp"
 	"soundbyte/pkg/middleware"
-	"soundbyte/pkg/protocol"
 
 	"github.com/gopxl/beep/v2"
 	"github.com/gopxl/beep/v2/speaker"
 )
 
-const (
-	SampleRate = 48000
-	Channels   = 2
-)
-
-// PCMStreamer implements beep.Streamer for Raw PCM
+// PCMStreamer implements beep.Streamer for raw PCM pulled from the jitter buffer.
 type PCMStreamer struct {
-	jb *jitter.Buffer
+	jb *domain.Buffer
 
-	// Buffer for one frame (bytes)
 	rawBytes []byte
-	// Current read position in rawBytes
-	rawPos int
+	rawPos   int
 }
 
-func NewPCMStreamer(jb *jitter.Buffer) *PCMStreamer {
-	return &PCMStreamer{
-		jb:       jb,
-		rawBytes: nil,
-		rawPos:   0,
-	}
+func NewPCMStreamer(jb *domain.Buffer) *PCMStreamer {
+	return &PCMStreamer{jb: jb}
 }
 
-// Stream fills samples with audio.
+// Stream fills samples with S16LE stereo audio from the jitter buffer.
 func (s *PCMStreamer) Stream(samples [][2]float64) (n int, ok bool) {
 	filled := 0
 	for filled < len(samples) {
-		// If we exhausted current PCM buffer, fetch next packet
 		if s.rawBytes == nil || s.rawPos >= len(s.rawBytes) {
 			pkt := s.jb.Pop()
 			if pkt == nil {
-				// No data available.
 				break
 			}
 			s.rawBytes = pkt.Data
 			s.rawPos = 0
 		}
-
-		// Copy from rawBytes to samples
-		// rawBytes is []byte (S16LE interleaved)
-		// Need 4 bytes per stereo sample (2 bytes L + 2 bytes R)
 		for s.rawPos+4 <= len(s.rawBytes) && filled < len(samples) {
-
-			// Little Endian Int16 -> Float64
 			lInt := int16(binary.LittleEndian.Uint16(s.rawBytes[s.rawPos : s.rawPos+2]))
 			rInt := int16(binary.LittleEndian.Uint16(s.rawBytes[s.rawPos+2 : s.rawPos+4]))
-
 			samples[filled][0] = float64(lInt) / 32768.0
 			samples[filled][1] = float64(rInt) / 32768.0
-
 			s.rawPos += 4
 			filled++
 		}
 	}
-
 	return filled, true
 }
 
-func (s *PCMStreamer) Err() error {
-	return nil
-}
+func (s *PCMStreamer) Err() error { return nil }
 
 func main() {
 	port := flag.Int("port", 5004, "UDP port to listen on")
@@ -107,34 +82,21 @@ func main() {
 	log.Printf("Listening on %s...", addr)
 
 	// 2. Setup Jitter Buffer
-	jb := jitter.New(*bufferPackets)
+	jb := domain.NewBuffer(*bufferPackets)
+	receiver := adaptudp.NewReceiver(conn, authKey)
 
 	// 3. Receive Loop (Background)
 	go func() {
 		mw := middleware.New("RX")
-		// Max UDP payload expected ~960 + header + optional HMAC (~1032)
-		buf := make([]byte, 2048)
 		for {
-			n, raddr, err := conn.ReadFromUDP(buf)
+			data, raddr, err := receiver.Receive()
 			if err != nil {
-				log.Printf("Read error: %v", err)
+				// Drop unauthenticated or malformed packets silently
 				continue
 			}
+			mw.Log(len(data), raddr)
 
-			mw.Log(n, raddr.String())
-
-			// Copy data
-			data := make([]byte, n)
-			copy(data, buf[:n])
-
-			// Verify auth if enabled
-			data, err = auth.Verify(data, authKey)
-			if err != nil {
-				// Drop unauthenticated packets silently
-				continue
-			}
-
-			pkt, err := protocol.Decode(data)
+			pkt, err := domain.Decode(data)
 			if err != nil {
 				log.Printf("Packet decode error: %v", err)
 				continue
@@ -144,8 +106,8 @@ func main() {
 	}()
 
 	// 4. Setup Audio
-	sr := beep.SampleRate(SampleRate)
-	err = speaker.Init(sr, sr.N(time.Second/10)) // 100ms internal buffer
+	sr := beep.SampleRate(domain.SampleRate)
+	err = speaker.Init(sr, sr.N(time.Second/10))
 	if err != nil {
 		log.Fatal(err)
 	}
