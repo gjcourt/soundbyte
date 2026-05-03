@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -35,7 +36,7 @@ func (s *streamingService) Stream(ctx context.Context) error {
 		}
 
 		if err := s.source.ReadFrame(pcm); err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				return nil
 			}
 			return fmt.Errorf("reading PCM: %w", err)
