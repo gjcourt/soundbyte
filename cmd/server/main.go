@@ -7,9 +7,10 @@ import (
 	"log"
 	"net"
 
-	adaptudp "soundbyte/internal/adapters/udp"
 	"soundbyte/internal/adapters/stdin"
+	adaptudp "soundbyte/internal/adapters/udp"
 	"soundbyte/internal/app"
+	"soundbyte/internal/ports/outbound"
 	"soundbyte/pkg/middleware"
 )
 
@@ -65,7 +66,7 @@ func main() {
 
 // loggingPacketSender wraps a PacketSender and logs each sent packet.
 type loggingPacketSender struct {
-	inner interface{ Send([]byte) (int, error) }
+	inner outbound.PacketSender
 	mw    *middleware.Logger
 	addr  string
 }
