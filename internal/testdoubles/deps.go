@@ -11,6 +11,7 @@ type FakePCMSource struct {
 
 var _ outbound.PCMSource = (*FakePCMSource)(nil)
 
+// ReadFrame delegates to ReadFrameFn if set; otherwise returns nil.
 func (f *FakePCMSource) ReadFrame(buf []byte) error {
 	if f.ReadFrameFn != nil {
 		return f.ReadFrameFn(buf)
@@ -25,6 +26,7 @@ type FakePacketSender struct {
 
 var _ outbound.PacketSender = (*FakePacketSender)(nil)
 
+// Send delegates to SendFn if set; otherwise reports a successful send of len(data) bytes.
 func (f *FakePacketSender) Send(data []byte) (int, error) {
 	if f.SendFn != nil {
 		return f.SendFn(data)
@@ -39,6 +41,7 @@ type FakePacketReceiver struct {
 
 var _ outbound.PacketReceiver = (*FakePacketReceiver)(nil)
 
+// Receive delegates to ReceiveFn if set; otherwise returns zero values.
 func (f *FakePacketReceiver) Receive() ([]byte, string, error) {
 	if f.ReceiveFn != nil {
 		return f.ReceiveFn()

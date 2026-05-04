@@ -23,6 +23,7 @@ func NewSource() *Source {
 
 // NewFileSource creates a PCMSource backed by the file at path.
 func NewFileSource(path string) (*Source, error) {
+	//nolint:gosec // path comes from operator-supplied -input CLI flag; intentional file inclusion
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err

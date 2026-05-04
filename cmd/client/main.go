@@ -49,7 +49,9 @@ func (s *PCMStreamer) Stream(samples [][2]float64) (n int, ok bool) {
 			s.rawPos = 0
 		}
 		for s.rawPos+4 <= len(s.rawBytes) && filled < len(samples) {
+			//nolint:gosec // PCM sample bit-pattern reinterpretation, value range bounded by S16LE audio format
 			left := int16(binary.LittleEndian.Uint16(s.rawBytes[s.rawPos : s.rawPos+2]))
+			//nolint:gosec // PCM sample bit-pattern reinterpretation, value range bounded by S16LE audio format
 			right := int16(binary.LittleEndian.Uint16(s.rawBytes[s.rawPos+2 : s.rawPos+4]))
 			samples[filled][0] = float64(left) / 32768.0
 			samples[filled][1] = float64(right) / 32768.0

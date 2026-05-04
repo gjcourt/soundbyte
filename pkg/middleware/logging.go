@@ -14,6 +14,7 @@ type Logger struct {
 	direction string
 }
 
+// New returns a Logger tagged with the given direction (e.g. "TX" or "RX").
 func New(direction string) *Logger {
 	return &Logger{
 		direction: direction,
@@ -21,6 +22,8 @@ func New(direction string) *Logger {
 	}
 }
 
+// Log accumulates the byte count for a packet from addr and emits an aggregated
+// rate line every 5 seconds.
 func (l *Logger) Log(bytes int, addr string) {
 	l.byteCount += bytes
 	l.ktPackets++

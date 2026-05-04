@@ -46,7 +46,8 @@ func (s *streamingService) Stream(ctx context.Context) error {
 		copy(payload, pcm)
 
 		pkt := &domain.Packet{
-			Sequence:  seq,
+			Sequence: seq,
+			//nolint:gosec // UnixNano is positive for any time between 1678-2262; safe to cast to uint64
 			Timestamp: uint64(time.Now().UnixNano()),
 			Data:      payload,
 		}
