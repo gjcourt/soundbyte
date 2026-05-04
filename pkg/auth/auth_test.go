@@ -6,6 +6,7 @@ import (
 )
 
 func TestSign_NilKey(t *testing.T) {
+	t.Parallel()
 	data := []byte("hello")
 	got := Sign(data, nil)
 	if !bytes.Equal(got, data) {
@@ -14,6 +15,7 @@ func TestSign_NilKey(t *testing.T) {
 }
 
 func TestVerify_NilKey(t *testing.T) {
+	t.Parallel()
 	data := []byte("hello")
 	got, err := Verify(data, nil)
 	if err != nil {
@@ -25,6 +27,7 @@ func TestVerify_NilKey(t *testing.T) {
 }
 
 func TestSignAndVerify(t *testing.T) {
+	t.Parallel()
 	key := []byte("my-secret-token")
 	data := []byte("packet-payload-here")
 
@@ -43,6 +46,7 @@ func TestSignAndVerify(t *testing.T) {
 }
 
 func TestVerify_WrongKey(t *testing.T) {
+	t.Parallel()
 	key1 := []byte("correct")
 	key2 := []byte("wrong")
 
@@ -54,6 +58,7 @@ func TestVerify_WrongKey(t *testing.T) {
 }
 
 func TestVerify_TooShort(t *testing.T) {
+	t.Parallel()
 	key := []byte("key")
 	_, err := Verify([]byte("short"), key)
 	if err != ErrInvalidMAC {
@@ -62,6 +67,7 @@ func TestVerify_TooShort(t *testing.T) {
 }
 
 func TestVerify_Tampered(t *testing.T) {
+	t.Parallel()
 	key := []byte("key")
 	signed := Sign([]byte("original"), key)
 

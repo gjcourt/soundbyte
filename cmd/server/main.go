@@ -84,8 +84,8 @@ func main() {
 		// Create Packet
 		pkt := &protocol.Packet{
 			Sequence:  seq,
-			Timestamp: uint64(time.Now().UnixNano()),
-			Data:      pcmBytes, // Raw PCM
+			Timestamp: uint64(time.Now().UnixNano()), //nolint:gosec // G115: UnixNano is always non-negative in practice; monotonic clock usage is intentional
+			Data:      pcmBytes,                      // Raw PCM
 		}
 		seq++
 

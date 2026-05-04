@@ -20,7 +20,7 @@ func TestLogger(t *testing.T) {
 	}
 }
 
-func TestLoggerExamples(t *testing.T) {
+func TestLoggerExamples(_ *testing.T) {
 	// A simple run
 	l := New("CLIENT")
 	l.Log(1024, "localhost")
