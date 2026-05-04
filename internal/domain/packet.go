@@ -19,7 +19,7 @@ const (
 	SampleRate = 48000
 	// Channels is the number of audio channels (stereo).
 	Channels = 2
-	// FrameSizeMs is the duration of one PCM frame in milliseconds.
+	// FrameSizeMs is the duration of one audio frame in milliseconds.
 	FrameSizeMs = 5
 	// FrameSizeBytes is the number of PCM bytes in one 5ms frame: 48000 * 2ch * 2bytes * 0.005s.
 	FrameSizeBytes = 960
