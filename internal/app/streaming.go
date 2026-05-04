@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -35,7 +36,7 @@ func (s *streamingService) Stream(ctx context.Context) error {
 		}
 
 		if err := s.source.ReadFrame(pcm); err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				return nil
 			}
 			return fmt.Errorf("reading PCM: %w", err)
@@ -45,7 +46,8 @@ func (s *streamingService) Stream(ctx context.Context) error {
 		copy(payload, pcm)
 
 		pkt := &domain.Packet{
-			Sequence:  seq,
+			Sequence: seq,
+			//nolint:gosec // UnixNano is positive for any time between 1678-2262; safe to cast to uint64
 			Timestamp: uint64(time.Now().UnixNano()),
 			Data:      payload,
 		}

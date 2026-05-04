@@ -1,0 +1,24 @@
+FROM golang:1.25-alpine AS builder
+
+# ALSA headers are required by gopxl/beep (via ebitengine/oto) on Linux.
+RUN apk add --no-cache alsa-lib-dev gcc musl-dev pkgconf
+
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+# Client: requires CGO (ALSA via oto). Builds for the native host arch only;
+# cross-compiling CGO would need a C cross-toolchain we don't ship.
+RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /client ./cmd/client
+
+# Final Stage
+FROM alpine:latest
+
+# ALSA runtime libs (libasound2 equivalent on alpine).
+RUN apk add --no-cache alsa-lib
+
+COPY --from=builder /client /usr/local/bin/soundbyte-client
+
+ENTRYPOINT ["soundbyte-client"]

@@ -15,9 +15,11 @@ const (
 	// MaxPacketSize is the maximum packet size (kept under traditional MTU of 1500).
 	MaxPacketSize = 1400
 
-	// Audio format constants: 48kHz S16LE stereo.
+	// SampleRate is the audio sample rate in Hz (48kHz S16LE stereo).
 	SampleRate = 48000
-	Channels   = 2
+	// Channels is the number of audio channels (stereo).
+	Channels = 2
+	// FrameSizeMs is the duration of one PCM frame in milliseconds.
 	FrameSizeMs = 5
 	// FrameSizeBytes is the number of PCM bytes in one 5ms frame: 48000 * 2ch * 2bytes * 0.005s.
 	FrameSizeBytes = 960

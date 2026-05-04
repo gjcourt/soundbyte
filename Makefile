@@ -19,7 +19,7 @@ build:
 	$(GOBUILD) -o $(BINARY_CLIENT) -v ./cmd/client
 
 test:
-	$(GOTEST) -v ./...
+	$(GOTEST) -race -v ./...
 
 clean:
 	$(GOCLEAN)
