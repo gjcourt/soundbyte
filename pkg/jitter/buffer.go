@@ -3,8 +3,9 @@ package jitter
 
 import (
 	"sort"
-	"soundbyte/pkg/protocol"
 	"sync"
+
+	"soundbyte/pkg/protocol"
 )
 
 // Buffer is a simple jitter buffer that reorders packets based on their sequence number.

@@ -14,6 +14,7 @@ type Logger struct {
 	direction string
 }
 
+// New creates a new Logger for the given direction label (e.g. "TX", "RX").
 func New(direction string) *Logger {
 	return &Logger{
 		direction: direction,
@@ -21,6 +22,7 @@ func New(direction string) *Logger {
 	}
 }
 
+// Log records bytes transferred from addr and periodically prints a summary.
 func (l *Logger) Log(bytes int, addr string) {
 	l.byteCount += bytes
 	l.ktPackets++

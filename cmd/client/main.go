@@ -62,8 +62,8 @@ func (s *PCMStreamer) Stream(samples [][2]float64) (n int, ok bool) {
 		for s.rawPos+4 <= len(s.rawBytes) && filled < len(samples) {
 
 			// Little Endian Int16 -> Float64
-			lInt := int16(binary.LittleEndian.Uint16(s.rawBytes[s.rawPos : s.rawPos+2]))
-			rInt := int16(binary.LittleEndian.Uint16(s.rawBytes[s.rawPos+2 : s.rawPos+4]))
+			lInt := int16(binary.LittleEndian.Uint16(s.rawBytes[s.rawPos : s.rawPos+2]))   //nolint:gosec // G115: PCM S16LE values are intentionally reinterpreted as signed
+			rInt := int16(binary.LittleEndian.Uint16(s.rawBytes[s.rawPos+2 : s.rawPos+4])) //nolint:gosec // G115: PCM S16LE values are intentionally reinterpreted as signed
 
 			samples[filled][0] = float64(lInt) / 32768.0
 			samples[filled][1] = float64(rInt) / 32768.0
