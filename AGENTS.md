@@ -13,20 +13,26 @@
 | `make clean` | Remove built binaries |
 | `docker-compose up` | Integrated server+client local run |
 
-Single test: `go test ./pkg/<package> -run TestX -v`
+Single test: `go test ./internal/<package>/... -run TestX -v`
 Pre-push: `golangci-lint run ./... && go test -race ./...`
 
 ## Architecture
 
-Pre-hexagonal layout — to be restructured into `internal/{domain,ports,app,adapters}` as part of the cross-repo hex migration. Today:
+Hexagonal architecture (ports & adapters). Two entry points: `cmd/server/` and `cmd/client/`.
 
-- `cmd/server/` — server entry point (reads PCM, chunks into 5ms frames, streams over UDP).
-- `cmd/client/` — client entry point (receives UDP, jitter-buffers, plays through `gopxl/beep`).
-- `server/` — server-side logic (PCM ingestion, framing, UDP transport).
-- `client/` — client-side logic (UDP receive, buffering, playback).
-- `pkg/` — shared library code reused by both binaries.
+- `cmd/server/` — wires stdin/file source + UDP sender → app streaming service.
+- `cmd/client/` — wires UDP receiver → domain jitter buffer → beep audio player.
+- `internal/domain/` — `Packet`, `Buffer`, protocol constants, `Decode`/`Encode`.
+- `internal/ports/inbound/` — `StreamingService` interface.
+- `internal/ports/outbound/` — `PCMSource`, `PacketSender`, `PacketReceiver` interfaces.
+- `internal/app/` — `streamingService` (implements `inbound.StreamingService`).
+- `internal/adapters/stdin/` — `Source` (implements `outbound.PCMSource`).
+- `internal/adapters/udp/` — `Sender` + `Receiver` with HMAC-SHA256 auth.
+- `internal/testdoubles/` — function-field fakes for all outbound ports.
+- `pkg/auth/` — HMAC-SHA256 sign/verify (shared utility, no domain dependencies).
+- `pkg/middleware/` — rate-limited packet-count logging (shared utility).
 
-Protocol is intentionally simple raw PCM over UDP — zero framing overhead.
+Protocol is intentionally simple raw PCM over UDP — no framing overhead beyond the 12-byte packet header.
 
 ## Conventions
 
@@ -38,7 +44,7 @@ Protocol is intentionally simple raw PCM over UDP — zero framing overhead.
 
 ## Invariants
 
-- The wire format is raw PCM — no framing, no headers. Adding fields breaks compatibility on both sides.
+- The wire format is a 12-byte header (4B sequence + 8B timestamp) followed by raw PCM. Adding header fields breaks compatibility on both sides.
 - Audio system libraries (PortAudio or platform equivalent) are required only on the client.
 - The compiled binaries live at `./server` and `./client`; never committed.
 

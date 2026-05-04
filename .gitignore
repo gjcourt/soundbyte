@@ -17,3 +17,6 @@ go.sum
 # Editors
 .vscode/
 .idea/
+
+# Worktrees
+.worktrees/

@@ -1,65 +1,82 @@
 ---
 title: "Hexagonal architecture migration"
-status: "In progress"
+status: "Completed"
 created: "2026-05-02"
-updated: "2026-05-02"
+updated: "2026-05-03"
 updated_by: "george"
 tags: ["architecture", "hex", "refactor"]
 ---
 
 # Hexagonal architecture migration
 
-## Current layout
+## Pre-migration layout (factual)
 
 ```
-server/    — WebSocket server, session management, audio mixing
-client/    — WebSocket client (thin wrapper)
-cmd/       — main entry points
+cmd/
+  server/main.go   — wires UDP sender + stdin/file source
+  client/main.go   — wires UDP receiver + jitter buffer + beep player
 pkg/
-  auth/       — JWT authentication
-  jitter/     — jitter buffer
-  middleware/ — HTTP middleware
-  protocol/   — audio packet format
+  auth/            — HMAC-SHA256 packet sign/verify
+  jitter/          — packet reordering buffer (sequence-keyed)
+  protocol/        — wire packet (header + PCM payload) encode/decode
+  middleware/      — rate-limited byte/packet count logger
 ```
 
-No `internal/` packages exist yet. This is the largest restructure across the
-six Go repos in the hex migration wave.
+This repo never had a WebSocket server, JWT auth, or session/mixing logic.
+The transport has always been one-way UDP carrying raw PCM. The migration
+goal was to relocate the existing types and I/O into a canonical hex
+layout and wire fakes for tests, without changing the wire protocol.
 
-## Migration steps
+## Migration steps (executed)
 
-1. **Define `internal/domain/`** — extract audio packet types, session
-   concepts, and jitter buffer logic from `server/` and `pkg/` into pure
-   domain types with no external deps. Already bootstrapped with `doc.go`.
-   One or more PRs.
+1. **Define `internal/domain/`** — move `pkg/protocol.Packet` and
+   `pkg/jitter.Buffer` into pure-domain types (no external deps). Already
+   bootstrapped with `doc.go`. One or more PRs.
 
-2. **Define outbound ports in `internal/ports/outbound/`** — identify external
-   dependencies (audio sinks, token verifiers, session stores) and express
-   them as interfaces. One PR.
+2. **Define outbound ports in `internal/ports/outbound/`** —
+   `PCMSource` (replaces ad-hoc stdin reader in `cmd/server`),
+   `PacketSender`, `PacketReceiver`. One PR.
 
-3. **Define inbound ports in `internal/ports/inbound/`** — interfaces for the
-   WebSocket entry point and any public control surface. One PR.
+3. **Define inbound ports in `internal/ports/inbound/`** —
+   `StreamingService` for the server's read-encode-send loop. One PR.
 
-4. **Create `internal/app/`** — move business logic (mix decisions, session
-   lifecycle) out of `server/` into app services that depend only on port
-   interfaces. One PR per use case.
+4. **Create `internal/app/`** — move the streaming loop out of
+   `cmd/server/main.go` into `app.streamingService`, depending only on
+   port interfaces. One PR.
 
-5. **Create `internal/adapters/`** — wrap `pkg/auth`, WebSocket I/O, and
-   other infrastructure as named adapters implementing outbound ports. Move
-   from `pkg/` to `internal/adapters/<name>/`. One PR per adapter.
+5. **Create `internal/adapters/`** — wrap stdin/file (`adapters/stdin`)
+   and UDP I/O (`adapters/udp`, including `pkg/auth` integration) as
+   named adapters implementing outbound ports. One PR per adapter.
 
-6. **Thin `server/` into a driving adapter** — `server/` becomes a thin
-   wrapper that wires inbound requests to `ports/inbound/` calls. One PR.
+6. **Thin `cmd/server/` and `cmd/client/` into wiring** — both `main`
+   functions become composition roots that wire ports to adapters.
+   One PR.
 
-7. **Add function-field fakes** — add fakes for each outbound port to
-   `testdoubles/`, wire into `ServerDeps`.
+7. **Add function-field fakes** — add `FakePCMSource`,
+   `FakePacketSender`, `FakePacketReceiver` to `testdoubles/`,
+   aggregated in `ServerDeps`.
 
-8. **Delete legacy packages** — once everything is migrated, remove `server/`,
-   `client/` (if wrapped), and `pkg/`. Update `cmd/` accordingly.
+8. **Delete legacy packages** — remove `pkg/protocol/` and
+   `pkg/jitter/` once `internal/domain/` is the source of truth.
+   `pkg/auth/` and `pkg/middleware/` remain as shared utilities with no
+   domain dependencies.
 
-## Depguard notes
+## Depguard rules (active)
 
-Bootstrap rules active for `internal/` packages only. Existing `server/`,
-`client/`, and `pkg/` code is unaffected until migration steps move it to
-`internal/`.
+| Rule | Status | Notes |
+|---|---|---|
+| `domain-no-other-internal` | Active | domain cannot import ports/app/adapters |
+| `ports-no-impl` | Active | ports cannot import app/adapters |
+| `app-no-adapters` | Active | app cannot import adapters |
+| `adapters-no-app` | Active | adapters cannot import app |
 
-No legacy allow entries needed until code is first moved into `internal/`.
+Bootstrapped before any code was moved into `internal/`; no legacy allow
+entries were needed because the migration moved code in one shot rather
+than incrementally.
+
+## Status
+
+Tracked in `docs/plans/2026-05-02-hex-migration-status.md`. All 8 steps
+landed in commit `787154c` (refactor/hex-layout). Follow-up work (tests
+for jitter/streaming/UDP adapters, observability via slog) is tracked
+under separate critique fixes.

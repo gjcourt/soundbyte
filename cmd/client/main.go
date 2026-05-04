@@ -2,83 +2,68 @@
 package main
 
 import (
+	"context"
 	"encoding/binary"
+	"errors"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
-	"soundbyte/pkg/auth"
-	"soundbyte/pkg/jitter"
+	adaptudp "soundbyte/internal/adapters/udp"
+	"soundbyte/internal/domain"
 	"soundbyte/pkg/middleware"
-	"soundbyte/pkg/protocol"
 
 	"github.com/gopxl/beep/v2"
 	"github.com/gopxl/beep/v2/speaker"
 )
 
-const (
-	SampleRate = 48000
-	Channels   = 2
-)
-
-// PCMStreamer implements beep.Streamer for Raw PCM
+// PCMStreamer implements beep.Streamer for raw PCM pulled from the jitter buffer.
 type PCMStreamer struct {
-	jb *jitter.Buffer
+	jb *domain.Buffer
 
-	// Buffer for one frame (bytes)
 	rawBytes []byte
-	// Current read position in rawBytes
-	rawPos int
+	rawPos   int
 }
 
-func NewPCMStreamer(jb *jitter.Buffer) *PCMStreamer {
-	return &PCMStreamer{
-		jb:       jb,
-		rawBytes: nil,
-		rawPos:   0,
-	}
+// NewPCMStreamer returns a PCMStreamer backed by jb.
+func NewPCMStreamer(jb *domain.Buffer) *PCMStreamer {
+	return &PCMStreamer{jb: jb}
 }
 
-// Stream fills samples with audio.
+// Stream fills samples with S16LE stereo audio from the jitter buffer.
 func (s *PCMStreamer) Stream(samples [][2]float64) (n int, ok bool) {
 	filled := 0
 	for filled < len(samples) {
-		// If we exhausted current PCM buffer, fetch next packet
 		if s.rawBytes == nil || s.rawPos >= len(s.rawBytes) {
 			pkt := s.jb.Pop()
 			if pkt == nil {
-				// No data available.
 				break
 			}
 			s.rawBytes = pkt.Data
 			s.rawPos = 0
 		}
-
-		// Copy from rawBytes to samples
-		// rawBytes is []byte (S16LE interleaved)
-		// Need 4 bytes per stereo sample (2 bytes L + 2 bytes R)
 		for s.rawPos+4 <= len(s.rawBytes) && filled < len(samples) {
-
-			// Little Endian Int16 -> Float64
-			lInt := int16(binary.LittleEndian.Uint16(s.rawBytes[s.rawPos : s.rawPos+2]))   //nolint:gosec // G115: PCM S16LE values are intentionally reinterpreted as signed
-			rInt := int16(binary.LittleEndian.Uint16(s.rawBytes[s.rawPos+2 : s.rawPos+4])) //nolint:gosec // G115: PCM S16LE values are intentionally reinterpreted as signed
-
-			samples[filled][0] = float64(lInt) / 32768.0
-			samples[filled][1] = float64(rInt) / 32768.0
-
+			//nolint:gosec // PCM sample bit-pattern reinterpretation, value range bounded by S16LE audio format
+			left := int16(binary.LittleEndian.Uint16(s.rawBytes[s.rawPos : s.rawPos+2]))
+			//nolint:gosec // PCM sample bit-pattern reinterpretation, value range bounded by S16LE audio format
+			right := int16(binary.LittleEndian.Uint16(s.rawBytes[s.rawPos+2 : s.rawPos+4]))
+			samples[filled][0] = float64(left) / 32768.0
+			samples[filled][1] = float64(right) / 32768.0
 			s.rawPos += 4
 			filled++
 		}
 	}
-
 	return filled, true
 }
 
-func (s *PCMStreamer) Err() error {
-	return nil
-}
+// Err returns the streamer's terminal error, if any.
+func (s *PCMStreamer) Err() error { return nil }
 
 func main() {
 	port := flag.Int("port", 5004, "UDP port to listen on")
@@ -86,73 +71,107 @@ func main() {
 	token := flag.String("token", "", "Shared secret for HMAC-SHA256 packet authentication (optional)")
 	flag.Parse()
 
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+
 	var authKey []byte
 	if *token != "" {
 		authKey = []byte(*token)
-		log.Println("Packet authentication enabled")
+		logger.Info("packet authentication enabled")
 	}
 
+	// Cancel the receive loop on SIGINT/SIGTERM.
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
 	// 1. Setup UDP
-	addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", *port))
+	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", *port))
+	if err != nil {
+		logger.Error("resolve udp addr", "err", err)
+		os.Exit(1)
+	}
 	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
-		log.Fatal(err)
+		logger.Error("listen udp", "err", err)
+		os.Exit(1)
 	}
 	defer func() { _ = conn.Close() }()
 
 	if err := conn.SetReadBuffer(1024 * 1024); err != nil {
-		log.Fatal(err)
+		logger.Error("set read buffer", "err", err)
+		os.Exit(1)
 	}
 
-	log.Printf("Listening on %s...", addr)
+	logger.Info("listening", "addr", addr.String())
 
 	// 2. Setup Jitter Buffer
-	jb := jitter.New(*bufferPackets)
+	jb := domain.NewBuffer(*bufferPackets)
+	receiver := adaptudp.NewReceiver(conn, authKey)
 
-	// 3. Receive Loop (Background)
-	go func() {
-		mw := middleware.New("RX")
-		// Max UDP payload expected ~960 + header + optional HMAC (~1032)
-		buf := make([]byte, 2048)
-		for {
-			n, raddr, err := conn.ReadFromUDP(buf)
-			if err != nil {
-				log.Printf("Read error: %v", err)
-				continue
-			}
-
-			mw.Log(n, raddr.String())
-
-			// Copy data
-			data := make([]byte, n)
-			copy(data, buf[:n])
-
-			// Verify auth if enabled
-			data, err = auth.Verify(data, authKey)
-			if err != nil {
-				// Drop unauthenticated packets silently
-				continue
-			}
-
-			pkt, err := protocol.Decode(data)
-			if err != nil {
-				log.Printf("Packet decode error: %v", err)
-				continue
-			}
-			jb.Push(pkt)
-		}
-	}()
+	// 3. Receive Loop (Background) — exits when ctx is cancelled.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go receiveLoop(ctx, &wg, logger, receiver, jb, conn)
 
 	// 4. Setup Audio
-	sr := beep.SampleRate(SampleRate)
-	err = speaker.Init(sr, sr.N(time.Second/10)) // 100ms internal buffer
-	if err != nil {
-		log.Fatal(err)
+	sr := beep.SampleRate(domain.SampleRate)
+	if err := speaker.Init(sr, sr.N(time.Second/10)); err != nil {
+		logger.Error("speaker init", "err", err)
+		cancel()
+		_ = conn.Close()
+		wg.Wait()
+		os.Exit(1)
 	}
 
 	streamer := NewPCMStreamer(jb)
 	speaker.Play(streamer)
 
-	log.Println("Client started. Playing Raw PCM...")
-	select {}
+	logger.Info("client started, playing raw PCM")
+
+	// Block until ctx is cancelled (signal received), then drain receive loop.
+	<-ctx.Done()
+	logger.Info("shutting down")
+	// Closing the conn unblocks any in-flight ReadFromUDP.
+	_ = conn.Close()
+	wg.Wait()
+}
+
+// receiveLoop reads packets, decodes them, and pushes onto the jitter buffer
+// until ctx is cancelled or the connection is closed.
+func receiveLoop(
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	logger *slog.Logger,
+	receiver *adaptudp.Receiver,
+	jb *domain.Buffer,
+	conn *net.UDPConn,
+) {
+	defer wg.Done()
+	mw := middleware.New("RX")
+	for {
+		if err := ctx.Err(); err != nil {
+			return
+		}
+		// Honour ctx between blocking reads.
+		_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		data, raddr, err := receiver.Receive()
+		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return
+			}
+			var nerr net.Error
+			if errors.As(err, &nerr) && nerr.Timeout() {
+				continue
+			}
+			// Drop unauthenticated or malformed packets silently.
+			continue
+		}
+		mw.Log(len(data), raddr)
+
+		pkt, err := domain.Decode(data)
+		if err != nil {
+			logger.Warn("packet decode error", "err", err)
+			continue
+		}
+		jb.Push(pkt)
+	}
 }
