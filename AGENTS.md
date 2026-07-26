@@ -34,6 +34,8 @@ Hexagonal architecture (ports & adapters). Two entry points: `cmd/server/` and `
 
 Protocol is intentionally simple raw PCM over UDP — no framing overhead beyond the 12-byte packet header.
 
+Full detail — component diagram, end-to-end dataflow, ports & adapters map, and the boundary-guard contract — lives in [`docs/architecture.md`](docs/architecture.md). Boundaries are enforced in CI by `go-arch-lint` (`.go-arch-lint.yml`).
+
 ## Conventions
 
 - **Server reads PCM from stdin or a named pipe** — never opens audio devices itself.

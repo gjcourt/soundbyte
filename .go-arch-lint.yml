@@ -1,0 +1,107 @@
+# go-arch-lint configuration — enforces soundbyte's hexagonal (ports & adapters)
+# boundaries. The inward dependency rule: adapters -> app -> domain; domain
+# depends on nothing internal; ports are interfaces owned by the core; cmd/* are
+# the composition roots and may wire everything together.
+#
+# Run locally:  go-arch-lint check
+# See docs/architecture.md for the full ports & adapters map.
+version: 3
+
+# External (vendored) libraries are always permitted — we only constrain the
+# internal dependency graph.
+allow:
+  depOnAnyVendor: true
+  # deepScan traces value-flow through dependency injection. It reports the
+  # composition roots (cmd/server, cmd/client) as depending on every type they
+  # wire together — which is exactly what a composition root is *supposed* to do.
+  # The import-level check (always on) is the canonical hexagonal boundary guard,
+  # so we keep the experimental DI tracer off to avoid false positives at the
+  # wiring seam.
+  deepScan: false
+
+components:
+  # --- core (depends on nothing outward) ---
+  domain:
+    in: internal/domain
+  ports-inbound:
+    in: internal/ports/inbound
+  ports-outbound:
+    in: internal/ports/outbound
+
+  # --- application / use-cases ---
+  app:
+    in: internal/app
+
+  # --- adapters (driving + driven) ---
+  adapter-stdin:
+    in: internal/adapters/stdin
+  adapter-udp:
+    in: internal/adapters/udp
+
+  # --- test support ---
+  testdoubles:
+    in: internal/testdoubles
+
+  # --- composition roots (entrypoints) ---
+  cmd-server:
+    in: cmd/server
+  cmd-client:
+    in: cmd/client
+
+  # --- shared, dependency-free utilities ---
+  pkg-auth:
+    in: pkg/auth
+  pkg-middleware:
+    in: pkg/middleware
+
+# Only components that legitimately depend on another internal component are
+# listed here. Components omitted from `deps` (domain, ports-inbound,
+# ports-outbound, pkg-auth, pkg-middleware) are default-deny: they may not
+# import any internal component. That is exactly the rule we want for the core
+# and the leaf utilities.
+deps:
+  # Application service: production code depends on domain + both port sets only,
+  # never on adapters. `testdoubles` is permitted solely because app's *_test.go
+  # unit tests wire the outbound-port fakes; no production file imports it.
+  app:
+    mayDependOn:
+      - domain
+      - ports-inbound
+      - ports-outbound
+      - testdoubles
+
+  # Driven adapters implement outbound ports; udp additionally uses pkg/auth.
+  adapter-stdin:
+    mayDependOn:
+      - ports-outbound
+  adapter-udp:
+    mayDependOn:
+      - ports-outbound
+      - pkg-auth
+
+  # Fakes implement the outbound ports for unit tests.
+  testdoubles:
+    mayDependOn:
+      - ports-outbound
+
+  # Composition root for the server: wires source + sender + app service.
+  cmd-server:
+    mayDependOn:
+      - domain
+      - ports-inbound
+      - ports-outbound
+      - app
+      - adapter-stdin
+      - adapter-udp
+      - pkg-auth
+      - pkg-middleware
+
+  # Composition root for the client: wires UDP receiver + domain jitter buffer +
+  # beep playback directly (the client half is not routed through app).
+  cmd-client:
+    mayDependOn:
+      - domain
+      - ports-outbound
+      - adapter-udp
+      - pkg-auth
+      - pkg-middleware
