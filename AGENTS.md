@@ -67,6 +67,25 @@ Self-hosted audio streaming for the homelab. Sources (Spotify Connect via `libre
 | Linux named pipe | Generic PCM source |
 | Snapcast (homelab) | Related multi-room audio system; SoundByte covers the simpler pipe-based use case |
 
+## Container images
+
+`.github/workflows/image.yml` builds and pushes to GHCR on every push to `main` (plus manual `workflow_dispatch`), authenticating with the built-in `GITHUB_TOKEN` — no PAT. This replaces the old manual `make image` flow. It builds **two** images:
+
+- `ghcr.io/gjcourt/soundbyte` — the server (`Dockerfile`), multi-arch `linux/amd64,linux/arm64`.
+- `ghcr.io/gjcourt/soundbyte-client` — the client (`Dockerfile.client`), **`linux/amd64` only** because it needs CGO/ALSA for playback and cannot cross-build for arm64.
+
+Each build publishes the same three tags for **both** images:
+
+| Tag | Mutability | Use |
+|---|---|---|
+| `YYYY-MM-DD` | mutable — a later same-day build overwrites it | build date (UTC) |
+| `YYYY-MM-DD-<sha7>` | **immutable & unique** | **the tag to pin in deployments** |
+| `latest` | mutable — always the newest build | convenience |
+
+**Deploying:** not currently deployed in homelab. If it lands there, read the exact published tag from the `image.yml` run (or `gh api user/packages/container/soundbyte/versions` / `.../soundbyte-client/versions`) and pin the `YYYY-MM-DD-<sha7>` tag.
+
+**First-build gotcha:** if a `GITHUB_TOKEN` push ever 403s, the GHCR package exists but is unlinked (created by an old manual PAT push) — delete it (`gh api --method DELETE user/packages/container/soundbyte`, and likewise `soundbyte-client`; needs the `delete:packages` scope) so the next run recreates it auto-linked, then re-run.
+
 ## Quality gate before push
 
 1. `golangci-lint run ./...`
