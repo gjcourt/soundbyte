@@ -49,7 +49,7 @@ jobs:
 
       # Server image (Dockerfile) — multi-arch, CGO-free cross build.
       - name: Build and push server image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
@@ -65,7 +65,7 @@ jobs:
 
       # Client image (Dockerfile.client) — needs CGO/ALSA, so amd64 only.
       - name: Build and push client image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile.client
