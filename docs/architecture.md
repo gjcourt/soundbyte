@@ -270,7 +270,7 @@ the homelab (there is no Flux/homelab pin path for it):
 ## Boundary guard
 
 The inward dependency rule above is enforced in CI by
-[go-arch-lint](https://github.com/fe3dback/go-arch-lint) v1.16.0 via
+[go-arch-lint](https://github.com/fe3dback/go-arch-lint) v1.18.0 via
 [`.go-arch-lint.yml`](../.go-arch-lint.yml) (config `version: 3`). Every Go
 package maps to exactly one component; `allow.depOnAnyVendor: true` permits
 external libraries. The experimental `deepScan` value-flow tracer is turned
@@ -282,7 +282,7 @@ hexagonal boundary guard.
 Run it locally:
 
 ```bash
-go install github.com/fe3dback/go-arch-lint@v1.16.0
+go install github.com/fe3dback/go-arch-lint@v1.18.0
 go-arch-lint check
 ```
 
