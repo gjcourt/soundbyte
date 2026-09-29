@@ -85,7 +85,7 @@ including the component diagram and why the client skips the app layer, is in
 
 ## Development
 
-Requires Go 1.25+ and, for the client only, ALSA headers on Linux:
+Requires Go 1.25.7+ and, for the client only, ALSA headers on Linux:
 
 ```bash
 sudo apt install libasound2-dev
