@@ -1,39 +1,56 @@
+<!-- readme-type: service -->
 # SoundByte
 
-SoundByte streams audio over UDP as raw 16-bit PCM chunks. A pure Go server
-reads PCM from stdin or a named pipe and blasts it to one or more clients,
-which buffer and play it back with `gopxl/beep`. It's built for a homelab LAN:
-feed it `librespot` for Spotify Connect, or any program that writes PCM to a
-pipe.
+Streams raw PCM audio over UDP from a pipe or Spotify Connect source to LAN clients
 
-There's no codec, no ACKs, and no retransmission — just fixed-size frames,
-a 12-byte header, and an optional HMAC signature.
+Streaming audio from a source machine to a speaker elsewhere on the LAN
+usually means running a full media server or dealing with codec negotiation
+and buffering. SoundByte skips that: a pure Go server reads raw PCM from
+stdin or a named pipe and sends fixed 5ms frames over UDP, and a client
+buffers and plays them back — no codec, no ACKs, no retransmission. It pairs
+with `librespot` for Spotify Connect, or any program that writes PCM to a
+pipe, and can optionally authenticate packets with HMAC-SHA256.
 
-## Quickstart
+**Status:** actively developed since 2026-02 (last commit 2026-09-24);
+publishes GHCR images on every push to `main` but is not deployed in the
+homelab yet.
 
-Start a client to listen for audio:
+```text
+$ go build -o server ./cmd/server && ./server -h
+Usage of ./server:
+  -addr string
+    	Target UDP address (default "255.255.255.255:5004")
+  -input string
+    	Path to input pipe/file (or 'stdin') (default "stdin")
+  -token string
+    	Shared secret for HMAC-SHA256 packet authentication (optional)
+```
+
+## Quick start
+
+Needs: Go 1.25.7+.
 
 ```bash
+git clone https://github.com/gjcourt/soundbyte && cd soundbyte
 go run ./cmd/client -port 5004
 ```
 
-Feed the server PCM. Audio must be 48kHz, stereo, 16-bit signed little-endian:
+In a second terminal, feed it 48kHz stereo 16-bit PCM:
 
 ```bash
 ffmpeg -i track.mp3 -f s16le -ac 2 -ar 48000 - | go run ./cmd/server -addr 127.0.0.1:5004
 ```
 
-Or point the server at a named pipe instead of stdin:
+## Usage
+
+Point the server at a named pipe instead of stdin:
 
 ```bash
 mkfifo /tmp/audio_pipe
 go run ./cmd/server -addr 127.0.0.1:5004 -input /tmp/audio_pipe
 ```
 
-### Spotify Connect via librespot
-
-`librespot` outputs 44.1kHz PCM, so resample to 48kHz before it reaches the
-server:
+Feed it Spotify Connect audio via `librespot`, resampled from 44.1kHz to 48kHz:
 
 ```bash
 librespot --name "SoundByte" --bitrate 320 --backend pipe --device /tmp/spotifypipe --initial-volume 100 &
@@ -42,6 +59,15 @@ tail -f /tmp/spotifypipe | \
   sox -t raw -r 44100 -e signed -b 16 -c 2 - -t raw -r 48000 - | \
   go run ./cmd/server -addr <CLIENT_IP>:5004
 ```
+
+Run the full stack locally in Docker instead of `go run`:
+
+```bash
+docker-compose build
+docker-compose up server
+```
+
+For the full flag list: `go run ./cmd/server -h` or `go run ./cmd/client -h`.
 
 ## Configuration
 
@@ -69,19 +95,18 @@ The server splits incoming PCM into fixed 5ms frames (960 bytes at 48kHz
 stereo 16-bit), wraps each in a 12-byte header (sequence + timestamp), signs
 it if a token is set, and sends it over UDP. The client verifies, decodes,
 and pushes frames into a jitter buffer that reorders by sequence number and
-only starts playback once enough packets have accumulated. `gopxl/beep`
+only starts playback once enough packets have accumulated; `gopxl/beep`
 renders the reassembled PCM to the host's default audio device.
 
 ```
 librespot/pipe → stdin → server (framing, optional HMAC) → UDP → client (verify, jitter buffer) → beep → speakers
 ```
 
-The code follows a hexagonal (ports & adapters) layout — `internal/domain`
-for the wire format and buffer, `internal/ports` for the interfaces,
-`internal/adapters` for stdin/UDP I/O, `internal/app` for the server-side
-streaming use case — enforced in CI by `go-arch-lint`. The full breakdown,
-including the component diagram and why the client skips the app layer, is in
-[`docs/architecture.md`](docs/architecture.md).
+The code follows a hexagonal (ports & adapters) layout, enforced in CI by
+`go-arch-lint`. The full component diagram, the ports/adapters map, and the
+doc index (design proposals, operations runbooks, migration plans, protocol
+reference) are in [`docs/architecture.md`](docs/architecture.md) and
+[`docs/README.md`](docs/README.md).
 
 ## Development
 
@@ -112,26 +137,16 @@ go install github.com/fe3dback/go-arch-lint@v1.18.0
 go-arch-lint check
 ```
 
-## Docker
+Conventions for contributors and agents: [AGENTS.md](AGENTS.md).
 
-```bash
-docker-compose build
-docker-compose up server   # run just the server, e.g. to pipe audio into it
-```
-
-The compose file wires a server and client together for a local end-to-end
-test, with the client on the host's ALSA device (`/dev/snd`). Running the
-client in Docker only produces audio on Linux — on macOS or Windows run it
-natively with `go run ./cmd/client` instead.
+## Deployment
 
 `.github/workflows/image.yml` publishes two images to GHCR on every push to
-`main`: `ghcr.io/gjcourt/soundbyte` (server, `linux/amd64` and `linux/arm64`)
-and `ghcr.io/gjcourt/soundbyte-client` (client, `linux/amd64` only, since it
-needs CGO and ALSA). Each build is tagged with the date, `latest`, and an
-immutable `<date>-<sha7>`.
+`main`: `ghcr.io/gjcourt/soundbyte` (server, `linux/amd64` and
+`linux/arm64`) and `ghcr.io/gjcourt/soundbyte-client` (client, `linux/amd64`
+only — needs CGO and ALSA). See [AGENTS.md](AGENTS.md) for the tag/mutability
+contract. Not deployed in the homelab yet, so there's no runbook.
 
-## Documentation
+## License
 
-Further docs live under [`docs/`](docs/), organized by topic — architecture,
-design proposals, operations, migration plans, protocol/auth reference, and
-research spikes. Start at [`docs/README.md`](docs/README.md).
+No licence file yet.
