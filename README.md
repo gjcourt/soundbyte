@@ -28,7 +28,7 @@ Usage of ./server:
 
 ## Quick start
 
-Needs: Go 1.25.7+.
+Needs: Go 1.25.7+, plus ALSA headers (`libasound2-dev`) on Linux for the client.
 
 ```bash
 git clone https://github.com/gjcourt/soundbyte && cd soundbyte
@@ -60,11 +60,13 @@ tail -f /tmp/spotifypipe | \
   go run ./cmd/server -addr <CLIENT_IP>:5004
 ```
 
-Run the full stack locally in Docker instead of `go run`:
+Run both containers with Docker Compose instead of `go run` — the server
+sends to the `client` service, and the client needs `/dev/snd`, so audio
+output only works on a Linux host:
 
 ```bash
 docker-compose build
-docker-compose up server
+docker-compose up
 ```
 
 For the full flag list: `go run ./cmd/server -h` or `go run ./cmd/client -h`.
@@ -118,18 +120,11 @@ sudo apt install libasound2-dev
 
 ```bash
 make build   # compile ./server and ./client
-make test    # go test -race -v ./...
-make all     # test + build
+make lint    # golangci-lint run ./... — CI lint job
+make test    # go test -race -v ./... — CI test job
 ```
 
-Before pushing:
-
-```bash
-golangci-lint run ./...
-go test -race ./...
-```
-
-Boundary checks (`go-arch-lint`) run in CI on every PR; to run the same check
+The CI `arch-lint` job checks the hexagonal boundaries; to run the same check
 locally:
 
 ```bash
