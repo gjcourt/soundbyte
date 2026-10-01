@@ -144,4 +144,4 @@ contract. Not deployed in the homelab yet, so there's no runbook.
 
 ## License
 
-[Apache-2.0](LICENSE).
+[Apache-2.0](LICENSE)
